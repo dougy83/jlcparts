@@ -2,6 +2,8 @@
 
 # JLC PCB SMD Assembly Component Catalogue
 
+Why is this file showing up
+
 A better tool to browse the components offered by the [JLC PCB SMT Assembly
 Service](https://jlcpcb.com/smt-assembly).
 

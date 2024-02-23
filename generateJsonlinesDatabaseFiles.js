@@ -141,5 +141,6 @@ writeOutputFile(`${dataPath}/components.jsonlines`, database.components.map(d =>
 writeOutputFile(`${dataPath}/attributes-lut.jsonlines`, lutToArray(database.attributesLut).join('\n'));
 
 execSync(`(cd ${dataPath} && tar -cf all.jsonlines.tar *.jsonlines.gz)`);
+//execSync(`(cd ${dataPath} && rm *.json.gz *.stock.json)`);
 
 console.log(`Reprocessing took ${Math.round((new Date().getTime() - startTime) / 1000)} seconds`);
