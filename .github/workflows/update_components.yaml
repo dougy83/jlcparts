@@ -4,6 +4,7 @@ on:
     branches: deploy-fixes
   schedule:
     - cron: '0 5 * * *'
+  workflow_dispatch:
 jobs:
   build_and_update:
     name: "Update component database and frontend"
