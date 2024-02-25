@@ -164,7 +164,7 @@ export class ComponentOverview extends React.Component {
         };
 
         db.settings.get("favorites").then(favorites => {
-          this.setState({favorites: new Set(favorites.value)});
+          this.setState({favorites: new Set(favorites?.value)});
         });
     }
 
