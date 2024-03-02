@@ -32,7 +32,7 @@ jobs:
 
           node copyDataFiles.js
           node generateJsonlinesDatabaseFiles.js
-          rm web/build/data/*.json.gz web/build/data/*.json
+          rm web/build/data/*.gz web/build/data/*.json
 
                     
       - name: Tar artifact # Artifact are case insensitive, this is workaround
