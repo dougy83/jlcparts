@@ -30,9 +30,20 @@ jobs:
           set -x
           mkdir -p web/build/data/
 
-          node copyDataFiles.js
-          node generateJsonlinesDatabaseFiles.js
-          rm web/build/data/*.gz web/build/data/*.json
+          sudo pip3 install -e .
+
+          wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip
+          for seq in $(seq 1 9); do
+              wget -q https://yaqwsx.github.io/jlcparts/data/cache.z0$seq || true
+          done
+
+          7z x cache.zip
+
+          jlcparts buildtables --jobs 0 \
+                    --ignoreoldstock 120 \
+                    cache.sqlite3 web/build/data
+
+          rm -f web/build/data/cache.z*
 
                     
       - name: Tar artifact # Artifact are case insensitive, this is workaround
