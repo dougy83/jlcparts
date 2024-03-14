@@ -13,6 +13,9 @@ from jlcparts.partLib import PartLibraryDb
 from jlcparts.common import sha256file
 from jlcparts import attributes, descriptionAttributes
 
+from jlcparts.attrnames import freqattr,capattr,resattr,powerattr,currentattr,voltsattr
+
+
 import tarfile
 
 from time import time
@@ -72,7 +75,7 @@ def normalizeAttribute(key, value):
         value = normalizeUnicode(value)
 
     try:
-        if key in larr(["Resistance", "Resistance in Ohms @ 25°C", "DC Resistance"]):
+        if key in larr(["Resistance", "Resistance in Ohms @ 25°C", "DC Resistance"] + resattr):
             value = attributes.resistanceAttribute(value)
         elif key in larr(["Balance Port Impedence", "Unbalance Port Impedence"]):
             value = attributes.impedanceAttribute(value)
@@ -84,7 +87,7 @@ def normalizeAttribute(key, value):
                 "Voltage - Off State (Max)", "Voltage - Input (Max)", "Voltage - Output (Max)",
                 "Voltage - Output (Fixed)", "Voltage - Output (Min/Fixed)",
                 "Supply Voltage (Max)", "Supply Voltage (Min)", "Output Voltage",
-                "Voltage - Input (Min)", "Drain Source Voltage (Vdss)"]):
+                "Voltage - Input (Min)", "Drain Source Voltage (Vdss)", "Overload voltage (max)", "Rated output voltage"] + voltsattr):
             value = attributes.voltageAttribute(value)
         elif key in larr(["Rated current", "surge current", "Current - Average Rectified (Io)",
                     "Current - Breakover", "Current - Peak Output", "Current - Peak Pulse (10/1000μs)",
@@ -92,14 +95,14 @@ def normalizeAttribute(key, value):
                     "Current - On State (It (AV)) (Max)", "Current - On State (It (RMS)) (Max)",
                     "Current - Supply (Max)", "Output Current", "Output Current (Max)",
                     "Output / Channel Current", "Current - Output",
-                    "Saturation Current (Isat)"]):
+                    "Saturation Current (Isat)", "Current rating"] + currentattr):
             value = attributes.currentAttribute(value)
-        elif key in larr(["Power", "Power Per Element", "Power Dissipation (Pd)"]):
+        elif key in larr(["Power", "Power Per Element", "Power Dissipation (Pd)"] + powerattr):
             value = attributes.powerAttribute(value)
         elif key in larr(["Number of Pins", "Number of Resistors", "Number of Loop",
                     "Number of Regulators", "Number of Outputs", "Number of Capacitors"]):
             value = attributes.countAttribute(value)
-        elif key in larr(["Capacitance"]):
+        elif key in larr(["Capacitance"] + capattr):
             value = attributes.capacitanceAttribute(value)
         elif key in larr(["Inductance"]):
             value = attributes.inductanceAttribute(value)
@@ -137,11 +140,11 @@ def normalizeAttribute(key, value):
         elif key == "Vce(on) (Max) @ Vge, Ic".lower():
             value = attributes.vceOnMax(value)
         elif key in larr(["Input Capacitance (Ciss@Vds)",
-                   "Reverse Transfer Capacitance (Crss@Vds)"]):
+                    "Reverse Transfer Capacitance (Crss@Vds)"]):
             value = attributes.capacityAtVoltage(value)
         elif key in larr(["Total Gate Charge (Qg@Vgs)"]):
             value = attributes.chargeAtVoltage(value)
-        elif key in larr(["Frequency - self resonant", "Output frequency (max)"]):
+        elif key in larr(["Frequency - self resonant", "Output frequency (max)"] + freqattr):
             value = attributes.frequencyAttribute(value)
         else:
             value = attributes.stringAttribute(value)
