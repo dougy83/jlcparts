@@ -803,7 +803,7 @@ class CategoryFilter extends React.Component {
                         url: comp[schema.url]
                     };
 
-                    if (words.length > 0) {
+                    if (words.length > 0 || notWords.length > 0) {
                         const text = componentText(component);
                         if(words.every(word => text.includes(word)) && !notWords.some(word => text.includes(word))) {
                             results.push(component);
