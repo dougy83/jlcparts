@@ -36,6 +36,9 @@ jobs:
           for seq in $(seq 1 9); do
               wget -q https://yaqwsx.github.io/jlcparts/data/cache.z0$seq || true
           done
+          for seq in $(seq 10 19); do
+              wget -q https://yaqwsx.github.io/jlcparts/data/cache.z$seq || true
+          done
 
           7z x cache.zip
 
