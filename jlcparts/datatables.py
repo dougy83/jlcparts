@@ -21,16 +21,13 @@ import tarfile
 from time import time
 
 def saveDatabaseFile(database, outpath, outfilename):
-    for key, value in database.items():
-        filename = os.path.join(outpath, key + ".jsonlines.gz")
-        with gzip.open(filename, "wt", encoding="utf-8") as f:
-            for entry in value:
-                json.dump(entry, f, separators=(',', ':'), sort_keys=False)
-                f.write("\n")
-
     with tarfile.open(os.path.join(outpath, outfilename), 'w') as tar:
         for key, value in database.items():
             filename = os.path.join(outpath, key + ".jsonlines.gz")
+            with gzip.open(filename, "wt", encoding="utf-8") as f:
+                for entry in value:
+                    json.dump(entry, f, separators=(',', ':'), sort_keys=False)
+                    f.write("\n")        
             tar.add(filename, arcname=os.path.relpath(filename, start=outpath))
             os.unlink(filename)
 
