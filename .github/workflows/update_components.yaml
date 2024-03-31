@@ -22,13 +22,9 @@ jobs:
         run: |
           cd web
           export BASEURL=https://dougy83.github.io/jlcparts
-          echo hello 1
-          npm install --verbose
-          echo hello 2
+          npm install --silent
           NODE_ENV=production PUBLIC_URL=${BASEURL} npm run build
-          echo hello 3
           touch .nojekyll
-          echo hello 4
       - name: Update database
         run: |
           set -x
