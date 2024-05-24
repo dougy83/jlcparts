@@ -170,7 +170,8 @@ export class ComponentOverview extends React.Component {
             quantity: 1,
             favorites: new Set(),
             favoritesOnly: false,
-            matchSubcats: true
+            matchSubcats: true,
+            matchBasic: false,
         };
 
         db.settings.get("favorites").then(favorites => {
@@ -399,6 +400,10 @@ export class ComponentOverview extends React.Component {
         this.setState({matchSubcats: !!doMatch});
     }
 
+    handleMatchBasic = (doMatch) => {
+        this.setState({matchBasic: !!doMatch});
+    }
+
     render() {
         let filterComponents = <>
             <CategoryFilter
@@ -407,6 +412,8 @@ export class ComponentOverview extends React.Component {
                 onAnnounceChange={this.handleStartComponentsChange}
                 matchSubcats={this.state.matchSubcats}
                 onMatchSubcats={this.handleMatchSubcats}
+                matchBasic={this.state.matchBasic}
+                onMatchBasic={this.handleMatchBasic}
                 />
             <PropertySelect
                 properties={this.collectProperties(this.state.components)}
@@ -749,6 +756,12 @@ class CategoryFilter extends React.Component {
         });
     }
 
+    componentDidUpdate = (prevProps) => {
+        if (this.props.matchBasic != prevProps.matchBasic) {
+            this.notifyParent();
+        }
+    }
+
     // Return query containing components based on current categories and
     // full-text search
     async components() {
@@ -781,6 +794,14 @@ class CategoryFilter extends React.Component {
         let aborted = false;
         this.setState({abort: () => aborted = true});
 
+        // TODO: read attributes array here to allow us to recognise basic/extended parts
+        const attributesLut = await unpackLinesAsArray('attributes-lut');
+
+        // find Extended attribute index
+        const extendedAttrIdx = attributesLut
+            .map((attr, i) => attr.indexOf('Basic/Extended') !== -1 && attr.indexOf('"Extended"') !== -1 ? i : -1)
+            .filter(i => i !== -1)[0];
+
         let schema;
         await unpackAndProcessLines('components', (comp, idx) => {
             comp = JSON.parse(comp);
@@ -789,28 +810,30 @@ class CategoryFilter extends React.Component {
                 schema = comp;
             } else {
                 if (categoryFilter(comp[schema.subcategoryIdx])) {
-                    let component = {
-                        lcsc: comp[schema.lcsc], 
-                        mfr: comp[schema.mfr], 
-                        description: comp[schema.description],
-                        attrsIdx: comp[schema.attrsIdx],
-                        stock: comp[schema.stock],
-                        category: comp[schema.subcategoryIdx],
-                        componentIdx: idx,
-                        joints: comp[schema.joints],
-                        datasheet: comp[schema.datasheet],
-                        price: comp[schema.price],
-                        img: comp[schema.img],
-                        url: comp[schema.url]
-                    };
+                    if (!this.props.matchBasic || !comp[schema.attrsIdx].includes(extendedAttrIdx)) {
+                        let component = {
+                            lcsc: comp[schema.lcsc], 
+                            mfr: comp[schema.mfr], 
+                            description: comp[schema.description],
+                            attrsIdx: comp[schema.attrsIdx],
+                            stock: comp[schema.stock],
+                            category: comp[schema.subcategoryIdx],
+                            componentIdx: idx,
+                            joints: comp[schema.joints],
+                            datasheet: comp[schema.datasheet],
+                            price: comp[schema.price],
+                            img: comp[schema.img],
+                            url: comp[schema.url]
+                        };
 
-                    if (words.length > 0 || notWords.length > 0) {
-                        const text = componentText(component);
-                        if(words.every(word => text.includes(word)) && !notWords.some(word => text.includes(word))) {
+                        if (words.length > 0 || notWords.length > 0) {
+                            const text = componentText(component);
+                            if(words.every(word => text.includes(word)) && !notWords.some(word => text.includes(word))) {
+                                results.push(component);
+                            }
+                        } else {
                             results.push(component);
                         }
-                    } else {
-                        results.push(component);
                     }
                 }
             }
@@ -821,7 +844,7 @@ class CategoryFilter extends React.Component {
         }
 
         if (results.length > 0) {
-            const attributesLut = await unpackLinesAsArray('attributes-lut');
+            //const attributesLut = await unpackLinesAsArray('attributes-lut');
             results.forEach(res => {
                 res.attributes = {}; 
                 res.attrsIdx.map(idx => JSON.parse(attributesLut[idx])).forEach(entry => {
@@ -959,8 +982,14 @@ class CategoryFilter extends React.Component {
                 <h3 className="block flex-1 text-lg mx-2 font-bold" id="category-select">
                     <span className="text-bold text-red-500">⛶</span> Select category
                 </h3>
+                <div className="py-1 pr-2">
+                    <input className="mr-1 leading-tight" type="checkbox" checked={this.props.matchBasic}
+                        onChange={e => {
+                            this.props.onMatchBasic(e.target.checked); } } />
+                    Basic parts only
+                </div>
                 <div className="py-1">
-                    <input className="mr-2 leading-tight" type="checkbox" checked={this.props.matchSubcats}
+                    <input className="mr-1 leading-tight" type="checkbox" checked={this.props.matchSubcats}
                         onChange={e => {
                             this.props.onMatchSubcats(e.target.checked); } } />
                     Include all matching subcategories
