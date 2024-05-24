@@ -757,7 +757,7 @@ class CategoryFilter extends React.Component {
     }
 
     componentDidUpdate = (prevProps) => {
-        if (this.props.matchBasic != prevProps.matchBasic) {
+        if (this.props.matchBasic !== prevProps.matchBasic) {
             this.notifyParent();
         }
     }
