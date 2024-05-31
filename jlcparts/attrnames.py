@@ -22,6 +22,7 @@ freqattr = [
 #    "switch frequency",
 #    "switching frequency",
 #    "transition frequency (ft)",
+    "Gain bandwidth product(gbp)",
     "working frequency"
     ]
 
