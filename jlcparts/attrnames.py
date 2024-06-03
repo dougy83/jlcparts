@@ -270,3 +270,7 @@ voltsattr = [
     "zener voltage (nom)",
 #    "zener voltage (range)"
     ]
+
+timeattr = [
+    "Propagation delay time"
+]

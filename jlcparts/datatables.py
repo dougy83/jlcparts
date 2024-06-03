@@ -13,7 +13,7 @@ from jlcparts.partLib import PartLibraryDb
 from jlcparts.common import sha256file
 from jlcparts import attributes, descriptionAttributes
 
-from jlcparts.attrnames import freqattr,capattr,resattr,powerattr,currentattr,voltsattr
+from jlcparts.attrnames import freqattr,capattr,resattr,powerattr,currentattr,voltsattr,timeattr
 
 
 import tarfile
@@ -143,6 +143,8 @@ def normalizeAttribute(key, value):
             value = attributes.chargeAtVoltage(value)
         elif key in larr(["Frequency - self resonant", "Output frequency (max)"] + freqattr):
             value = attributes.frequencyAttribute(value)
+        elif key in larr(timeattr):
+            value = attributes.timeAttribute(value)
         else:
             value = attributes.stringAttribute(value)
     except: 

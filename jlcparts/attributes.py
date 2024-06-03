@@ -124,6 +124,10 @@ def readFrequency(value):
     value = erase(value, ["Hz", "HZ", "H"]).strip()
     return readWithSiPrefix(value)
 
+def readTime(value):
+    value = erase(value, ["s"]).strip()
+    return readWithSiPrefix(value)
+
 def readInductance(value):
     value = value.replace("H", "").strip()
     return readWithSiPrefix(value)
@@ -307,6 +311,15 @@ def frequencyAttribute(value):
         }
     }
 
+def timeAttribute(value):
+    value = readFrequency(value)
+    return {
+        "format": "${time}",
+        "primary": "time",
+        "values": {
+            "time": [value, "time"]
+        }
+    }
 
 def rdsOnMaxAtIdsAtVgs(value):
     """
