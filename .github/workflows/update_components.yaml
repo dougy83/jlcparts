@@ -17,7 +17,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            nodejs npm 
+            nodejs npm fuse-zip
       - name: Build frontend
         run: |
           cd web
@@ -32,19 +32,21 @@ jobs:
 
           sudo pip3 install -e .
 
-          wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip
-          for seq in $(seq 1 9); do
-              wget -q https://yaqwsx.github.io/jlcparts/data/cache.z0$seq || true
-          done
-          for seq in $(seq 10 19); do
-              wget -q https://yaqwsx.github.io/jlcparts/data/cache.z$seq || true
-          done
+          wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip https://yaqwsx.github.io/jlcparts/data/cache.z{01..30} || true
 
-          7z x cache.zip
+          # combine zip parts into single file
+          cat cache.z* > cache-combined-bad.zip
+          zip -FF cache-combined-bad.zip -O cache-combined.zip <<EOF
+          z
+          
+          EOF
 
+          mkdir /tmp/cachezip
+          fuse-zip cache-combined.zip /tmp/cachezip
           jlcparts buildtables --jobs 0 \
                     --ignoreoldstock 120 \
-                    cache.sqlite3 web/build/data
+                    /tmp/cachezip/cache.sqlite3 web/build/data
+          fusermount -u /tmp/cachezip
 
           rm -f web/build/data/cache.z*
 
