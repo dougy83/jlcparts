@@ -312,7 +312,7 @@ def frequencyAttribute(value):
     }
 
 def timeAttribute(value):
-    value = readFrequency(value)
+    value = readTime(value)
     return {
         "format": "${time}",
         "primary": "time",
