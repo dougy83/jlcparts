@@ -32,20 +32,30 @@ jobs:
 
           sudo pip3 install -e .
 
-          wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip https://yaqwsx.github.io/jlcparts/data/cache.z{01..30} || true
+          # download cache parts into single file
+          >cache-combined-bad.zip
+          for i in $(seq -w 01 19)
+          do            
+            wget -q https://yaqwsx.github.io/jlcparts/data/cache.z$i || true
+            if [ -f "cache.z$i" ]; then
+              cat cache.z$i >> cache-combined-bad.zip
+              rm cache.z$i
+            fi
+          done
+          wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip || true
+          cat cache.zip >> cache-combined-bad.zip
+          rm cache.zip
 
-          # combine zip parts into single file
-          cat cache.z* > cache-combined-bad.zip
-          zip -FF cache-combined-bad.zip -O cache-combined.zip <<EOF
-          z
-          
-          EOF
+          # fix the concatenated zip file ('z\r' is to make it search itself for the split volumes)
+          echo -e 'z\r\n' | zip -FF cache-combined-bad.zip -O cache-combined.zip
+          rm cache-combined-bad.zip
 
           mkdir /tmp/cachezip
           fuse-zip cache-combined.zip /tmp/cachezip
           jlcparts buildtables --jobs 0 \
                     --ignoreoldstock 120 \
                     /tmp/cachezip/cache.sqlite3 web/build/data
+          rm /tmp/cachezip/cache.sqlite3
           fusermount -u /tmp/cachezip
 
           rm -f web/build/data/cache.z*
