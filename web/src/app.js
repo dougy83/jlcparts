@@ -13,7 +13,7 @@ import { far } from '@fortawesome/free-regular-svg-icons'
 import { fab } from '@fortawesome/free-brands-svg-icons'
 
 import './main.css';
-import { updateComponentLibrary, checkForComponentLibraryUpdate, db, unpackLinesAsArray } from './db'
+import { updateComponentLibrary, checkForComponentLibraryUpdate, db, unpackLinesAsArray, unpackAndProcessLines } from './db'
 import { ComponentOverview } from './componentTable'
 import { History } from './history'
 
@@ -80,9 +80,13 @@ class FirstTimeNote extends React.Component {
   }
 
   componentDidMount() {
-    unpackLinesAsArray('components').then(components => {
-      this.setState({componentCount: Math.max(0, components.length - 1)});   // don't count the schema entry
-    })
+    (async () => {
+        let count = 0;
+        await unpackAndProcessLines('components', component => {
+            count++;
+        });
+        this.setState({componentCount: Math.max(0, count - 1)});   // don't count the schema entry
+    })();
   }
 
   render() {
