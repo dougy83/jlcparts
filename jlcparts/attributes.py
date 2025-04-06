@@ -1,4 +1,5 @@
 import re
+import jlcparts.regexCache as re_cached
 import sys
 import math
 
@@ -105,7 +106,7 @@ def readPower(value):
         return readPower(value.split(";")[0])
     if "/" in value:
         # Fraction
-        numerator, denominator, unit = re.fullmatch(r"(\d+)/(\d+)\s*(\w+)", value).groups()
+        numerator, denominator, unit = re_cached.fullmatch(r"(\d+)/(\d+)\s*([fpnuμmkKMG]?W)", value).groups()
         value = str(float(numerator) / float(denominator)) + unit
     value = value.replace("W", "").strip()
     return readWithSiPrefix(value)
@@ -166,7 +167,7 @@ def impedanceAttribute(value):
 
 
 def voltageAttribute(value):
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
      # Remove multiple current values
     value = value.split("x")[-1]
     value = value.split("/")[-1]
@@ -179,7 +180,7 @@ def voltageAttribute(value):
     value = value.replace("X1:", "")
     value = value.replace("A", "V") # Common typo
     value = erase(value, "±")
-    value = re.sub(";.*", "", value)
+    value = re_cached.sub(";.*", "", value)
 
     if value.strip() in ["-", "Tracking", "nV"]:
         value = "NaN"
@@ -214,7 +215,7 @@ def currentAttribute(value):
         }
     else:
         value = erase(value, ["±", "Up to"])
-        value = re.sub(r"\(.*?\)", "", value)
+        value = re_cached.sub(r"\(.*?\)", "", value)
         # Remove multiple current values
         value = value.split("x")[-1]
         value = value.split("/")[-1]
@@ -233,7 +234,7 @@ def currentAttribute(value):
         }
 
 def powerAttribute(value):
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     # Replace V/W typo
     value = value.replace("V", "W")
     # Strip random additional characters (e.g., C108632)
@@ -258,7 +259,7 @@ def countAttribute(value):
             }
         }
     value = erase(value, [" - Dual"])
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     # There are expressions like a+b, so let's sum them
     try:
         count = sum(map(int, value.split("+")))
@@ -329,7 +330,9 @@ def rdsOnMaxAtIdsAtVgs(value):
     def readRds(v):
         if v == "-":
             return "NaN", "NaN", "NaN"
-        matched = re.fullmatch(r"([\w.]*)\s*[@\s]\s*([-\w.]*)\s*[,，]\s*([-~\w.]*)").groups()
+        #matched = re_cached.fullmatch(r"([\w.]*)\s*[@\s]\s*([-\w.]*)\s*[,，]\s*([-~\w.]*)").groups()
+        # more specific regex produces 4x speedup
+        matched = re_cached.fullmatch(r"(-?\d+?(?:\.\d+?)?[fpnuμmkKMG]?(?:[AΩ]|Ohms?))\s*?[@\s]\s*?(-?\d+?(?:\.\d+?)?[fpnuμmkKMG]?[AV])\s*?[,，]\s*(-?\d+?(?:\.\d+?)?[fpnuμmkKMG]?A)").groups()
         # There are some transistors with a typo; using "A" instead of "V" or Ω, fix it:
         resistance = matched.group(1).replace("A", "Ω")
         voltage = matched.group(3).replace("A", "V")
@@ -380,7 +383,7 @@ def rdsOnMaxAtVgsAtIds(value):
         if v == "-":
             return "NaN", "NaN", "NaN"
         #
-        match = re.fullmatch(
+        match = re_cached.fullmatch(
                 r"\s*([\w.]+)\s*(?:[@\s]\s*([-~\w.]+?)\s*(?:(?:[,，]|(?<=[vam])(?=\d))([-\w.]+)\s*)?)?",
                 v,
                 re.I
@@ -389,7 +392,7 @@ def rdsOnMaxAtVgsAtIds(value):
             resistance, voltage, current = match.groups()
         else:
             # There some components in the form 2.5Ω@VGS=10V, try this format
-            resistance, voltage = re.fullmatch(
+            resistance, voltage = re_cached.fullmatch(
                 r"\s*(.*Ω)\s*@\s*VGS=\s*(.*V)\s*",
                 v,
                 re.I
@@ -455,7 +458,7 @@ def continuousTransistorCurrent(value, symbol):
     """
     Can parse values like '10A', '10A,12A', '1OA(Tc)'
     """
-    value = re.sub(r"\(.*?\)", "", value) # Remove all notes about temperature
+    value = re_cached.sub(r"\(.*?\)", "", value) # Remove all notes about temperature
     value = erase(value, ["±"])
     value = value.replace("V", "A") # There are some typos - voltage instead of current
     value = value.replace(";", ",") # Sometimes semicolon is used instead of comma
@@ -513,7 +516,7 @@ def powerDissipation(value):
     """
     Parse single or double power dissipation into structured value
     """
-    value = re.sub(r"\(.*?\)", "", value) # Remove all notes about temperature
+    value = re_cached.sub(r"\(.*?\)", "", value) # Remove all notes about temperature
     value = value.replace("V", "W") # Common typo
     if "A" in value:
         # The value is a clear nonsense
@@ -555,12 +558,14 @@ def vgsThreshold(value):
     def readVgs(v):
         if value == "-":
             return "NaN", "NaN"
-        voltage, current = re.match(r"([-\w.]*)(?:[@| ]([-\w.]*))?", v).groups()
+        #voltage, current = re_cached.match(r"([-\w.]*)(?:[@| ]([-\w.]*))?", v).groups()
+        # ~12x faster
+        voltage, current = re_cached.match(r"(-?\d+?(?:\.\d+?)?[fpnuμmkKMG]?[V])(?:\s*?[@\s]\s*?(-?\d+?(?:\.\d+?)?[fpnuμmkKMG]?[A]))?", v).groups()
         if current is None:
             current = "-"
         return readVoltage(voltage), readCurrent(current)
 
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     if "," in value or ";" in value:
         splitchar = "," if "," in value else ";"
         s = value.split(splitchar)
@@ -601,7 +606,7 @@ def esr(value):
             }
         }
     value = erase(value, ["(", ")"]) # For resonators, the value is enclosed in parenthesis
-    matches = re.fullmatch(r"([\w.]*)\s*(?:[@\s]\s*([~\w.]*))?[.,]?", value)
+    matches = re_cached.fullmatch(r"([\w.]*)\s*(?:[@\s]\s*([~\w.]*))?[.,]?", value)
     res = readResistance(matches.group(1))
     if matches.group(2):
         freq = readFrequency(matches.group(2).split('~')[-1])
@@ -685,7 +690,7 @@ def forwardVoltage(value):
             }
         }
     value = erase(value, ["<"])
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     s = value.split("@")
 
     vStr = s[0].replace("A", "V") # Common typo
@@ -716,7 +721,7 @@ def voltageRange(value):
                 "Vmax": ["NaN", "voltage"]
             }
         }
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     value = value.replace("A", "V") # Common typo
     value = value.split(",")[0].split(";")[0] # In the case of multivalue range
     if ".." in value:
@@ -755,7 +760,7 @@ def clampingVoltage(value):
                 "Ic": ["NaN", "current"]
             }
         }
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     s = value.split("@")
     vC = s[0].split(",")[0].split("/")[0].split(";")[0]
     vC = vC.replace("A", "V") # Common typo
@@ -783,7 +788,7 @@ def vceBreakdown(value):
     return voltageAttribute(value)
 
 def vceOnMax(value):
-    matched = re.match(r"(.*)@(.*),(.*)", value)
+    matched = re_cached.match(r"(.*)@(.*),(.*)", value)
     if matched:
         vce = readVoltage(matched.group(1))
         vge = readVoltage(matched.group(2))
@@ -812,7 +817,7 @@ def temperatureAttribute(value):
             }
         }
     value = erase(value, ["@"])
-    value = re.sub(r"\(.*?\)", "", value)
+    value = re_cached.sub(r"\(.*?\)", "", value)
     value = value.strip()
     assert value.endswith("℃")
     value = erase(value, ["℃"])
@@ -892,7 +897,7 @@ def chargeAtVoltage(value):
             }
         }
     def readTheTuple(value):
-        match = re.match(r"(?P<cap>.*?)(\s*[ @](?P<voltage>.*))?", value.strip())
+        match = re_cached.match(r"(?P<cap>.*?)(\s*[ @](?P<voltage>.*))?", value.strip())
         if match is None:
             raise RuntimeError(f"Cannot parse charge at voltage for {value}")
         q = match.groupdict().get("cap")
@@ -904,7 +909,7 @@ def chargeAtVoltage(value):
             q = "NaN"
 
         if v is not None:
-            v = readVoltage(re.sub(r'-?\d+~', '', v.strip()))
+            v = readVoltage(re_cached.sub(r'-?\d+~', '', v.strip()))
         else:
             v = "NaN"
         return q, v

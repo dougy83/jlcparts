@@ -52,7 +52,8 @@ powerattr = [
     "maximum power",
     "maximum switching power",
     "power rating",
-    "rated power"
+    "rated power",
+    "power dissipation (pd)"
     ]
 
 currentattr = [

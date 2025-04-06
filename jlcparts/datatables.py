@@ -6,6 +6,7 @@ import json
 import datetime
 import gzip
 import multiprocessing
+import traceback
 from pathlib import Path
 
 import click
@@ -20,35 +21,65 @@ import tarfile
 
 from time import time
 
-def saveDatabaseFile(database, outpath, outfilename):
+@dataclasses.dataclass
+class SaveDatabaseParams:
+    outpath: str
+    key: str
+    value: object
+
+def _save_database_item(params: SaveDatabaseParams):
+    key = params.key
+    value = params.value
+    outpath = params.outpath
+    filename = os.path.join(outpath, key + ".jsonlines.gz")
+    print(f"saving {key}")
+    with gzip.open(filename, "wt", encoding="utf-8") as f:
+        for entry in value:
+            json.dump(entry, f, separators=(',', ':'), sort_keys=False)
+            f.write("\n")
+        f.close()
+    return filename
+
+def saveDatabaseFile(database, outpath, outfilename, jobs=None):
     with tarfile.open(os.path.join(outpath, outfilename), 'w') as tar:
+        params = []
+        seenKeys = set()
         for key, value in database.items():
-            filename = os.path.join(outpath, key + ".jsonlines.gz")
-            with gzip.open(filename, "wt", encoding="utf-8") as f:
-                for entry in value:
-                    json.dump(entry, f, separators=(',', ':'), sort_keys=False)
-                    f.write("\n")        
-            tar.add(filename, arcname=os.path.relpath(filename, start=outpath))
-            os.unlink(filename)
+            if key in seenKeys:
+                raise Exception(f"file key {key} already seen! this should never happen.")
+            seenKeys.add(key)
+            params.append(SaveDatabaseParams(key = key, value = value, outpath = outpath))
+        with multiprocessing.Pool(jobs or multiprocessing.cpu_count()) as pool:
+            for i, filename in enumerate(pool.imap_unordered(_save_database_item, params)):
+                tar.add(filename, arcname=os.path.relpath(filename, start=outpath))
+                os.unlink(filename)
 
 def weakUpdateParameters(attrs, newParameters):
     for attr, value in newParameters.items():
-        if attr in attrs and attrs[attr] not in ["", "-"]:
+        if attr in attrs and attrs[attr] is not None and attrs[attr].strip() not in ["", "-", "null"]:
             continue
         attrs[attr] = value
 
 def extractAttributesFromDescription(description):
-    if description.startswith("Chip Resistor - Surface Mount"):
+    if ("Chip Resistor - Surface Mount" in description or
+        "Current Sense Resistors" in description):
         return descriptionAttributes.chipResistor(description)
-    if (description.startswith("Multilayer Ceramic Capacitors MLCC") or
-       description.startswith("Aluminum Electrolytic Capacitors")):
+    if ("Multilayer Ceramic Capacitors MLCC" in description or
+       "Aluminum Electrolytic Capacitors" in description or
+       "Tantalum Capacitors" in description or
+       "Polymer Aluminum Capacitors" in description):
         return descriptionAttributes.capacitor(description)
+    if "MOSFET" in description:
+        return descriptionAttributes.mosfet(description)
+    if "LED" in description:
+        return descriptionAttributes.led(description)
     return {}
 
 def normalizeUnicode(value):
     """
     Replace unexpected unicode sequence with a resonable ones
     """
+    value = value.replace("插件", "Plugin")
     value = value.replace("（", " (").replace("）", ")")
     value = value.replace("，", ",")
     return value
@@ -139,7 +170,7 @@ def normalizeAttribute(key, value):
         elif key in larr(["Input Capacitance (Ciss@Vds)",
                     "Reverse Transfer Capacitance (Crss@Vds)"]):
             value = attributes.capacityAtVoltage(value)
-        elif key in larr(["Total Gate Charge (Qg@Vgs)"]):
+        elif key in larr(["Total Gate Charge (Qg@Vgs)", "Gate charge(qg)"]):
             value = attributes.chargeAtVoltage(value)
         elif key in larr(["Frequency - self resonant", "Output frequency (max)"] + freqattr):
             value = attributes.frequencyAttribute(value)
@@ -192,6 +223,8 @@ def normalizeAttributeKey(key):
         key = "Rated current"
     if key == "Power - Max":
         key = "Power"
+    if key in ["Power dissipation", "Power dissipation (pd)", "Pd - power dissipation", "Pd - power dissipation(pd)", "Pd - power dissipation (pd)"]:
+        key = "Power dissipation (Pd)"
     if key == "Voltage - Breakover":
         key = "Voltage - Breakdown (Min)"
     if key == "Gate Threshold Voltage-VGE(th)":
@@ -202,6 +235,18 @@ def normalizeAttributeKey(key):
         key = "Lifetime @ Temperature"
     if key.startswith("Q @ Freq"):
         key = "Q @ Frequency"
+    if key == "Input capacitance(ciss@vds)":
+        key = "Input capacitance (ciss@vds)"
+    if key in ["Continuous drain current(id)", "Continuous drain current (id)"]:
+        key = "Continuous drain current (Id)"
+    if key in ["Breakdown voltage", "Breakdown voltage (vbr)"]:
+        key = "Breakdown voltage (Vbr)"
+    if key in ["Forward voltage", "Forward voltage (vf)", "Forward voltage(vf)"]:
+        key = "Forward voltage (Vf)"
+    if key.lower() in ["saturation current", "saturation current (isat)", "saturation current(isat)", "current - saturation", "current - saturation(isat)", "current - saturation (isat)"]:
+        key = "Saturation current (Isat)"
+    if key.lower() in ["dc resistance", "dc resistance (dcr)", "dc resistance(dcr)"]:
+        key = "DC Resistance"
     return normalizeCapitalization(key)
 
 def pullExtraAttributes(component):
@@ -251,7 +296,8 @@ def extractComponent(component, schema):
                     # LCSC return empty attributes as a list, not dictionary
                     attr = {}
                 attr.update(pullExtraAttributes(component))
-                weakUpdateParameters(attr, extractAttributesFromDescription(component["description"]))
+                extractedAttribs = extractAttributesFromDescription(component["description"])
+                weakUpdateParameters(attr, extractedAttribs)
 
                 # Remove extra attributes that are either not useful, misleading
                 # or overridden by data from JLC
@@ -288,7 +334,7 @@ def extractComponent(component, schema):
                 propertyList.append(None)
         return propertyList
     except Exception as e:
-        raise RuntimeError(f"Cannot extract {component['lcsc']}").with_traceback(e.__traceback__)
+        raise RuntimeError(f"Cannot extract {component['lcsc']} - {e} - {traceback.format_exc()}").with_traceback(e.__traceback__)
 
 def buildDatatable(components):
     schema = ["lcsc", "mfr", "joints", "description",
@@ -336,6 +382,7 @@ class MapCategoryParams:
     libraryPath: str
     outdir: str
     ignoreoldstock: int
+    limitRange: tuple
 
     catName: str
     subcatName: str
@@ -350,7 +397,7 @@ def _map_category(val: MapCategoryParams):
         return None
     
     lib = PartLibraryDb(val.libraryPath)
-    components = lib.getCategoryComponents(val.catName, val.subcatName, stockNewerThan=val.ignoreoldstock)
+    components = lib.getCategoryComponents(val.catName, val.subcatName, stockNewerThan=val.ignoreoldstock, limitRange=val.limitRange)
     if not components:
         return None
     
@@ -376,16 +423,31 @@ def buildtables(library, outdir, ignoreoldstock, jobs):
     Path(outdir).mkdir(parents=True, exist_ok=True)
     clearDir(outdir)
 
-
-    total = lib.countCategories()
+    total = 0
     categoryIndex = {}
 
     params = []
+    blockSize = 50000
     for (catName, subcategories) in lib.categories().items():
         for subcatName in subcategories:
-            params.append(MapCategoryParams(
-                libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
-                catName=catName, subcatName=subcatName))
+            subcatSize = lib.getCategoryComponentsCount(catName, subcatName)
+            if subcatSize <= blockSize:
+                total += 1
+                params.append(MapCategoryParams(
+                    libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
+                    catName=catName, subcatName=subcatName, limitRange=None))
+            else:
+                print(f"splitting category {catName} / {subcatName} up...")
+                for ofs in range(0, subcatSize, blockSize):
+                    print(f"category {catName} / {subcatName} block {ofs}")
+                    total += 1
+                    params.append(MapCategoryParams(
+                        libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
+                        catName=catName, subcatName=subcatName, limitRange=(ofs, blockSize)))
+
+    #params = [x for x in params if x.catName in ["Capacitors", "Resistors"]]
+    #while len(params) > 20:
+    #    params.pop()
 
     with multiprocessing.Pool(jobs or multiprocessing.cpu_count()) as pool:
         for i, result in enumerate(pool.imap_unordered(_map_category, params)):
@@ -409,9 +471,10 @@ def buildtables(library, outdir, ignoreoldstock, jobs):
     }
     
     # fill database
+    print("Filling database...")
     s = None    # schema lookup
     subcatIndex = 0
-    for sourceName, subcatEntry in categoryIndex.items():        
+    for sourceName, subcatEntry in categoryIndex.items():
         if s is None:
             s = schemaToLookup(subcatEntry["schema"])  # all schema will be the same
 
@@ -436,7 +499,11 @@ def buildtables(library, outdir, ignoreoldstock, jobs):
             ]]
 
     # invert the lut
+    print("Creating lookup table...")
     db["attributes-lut"] = [json.loads(str) for str in lutToArray(db["attributes-lut"])]
-    saveDatabaseFile(db, outdir, "all.jsonlines.tar")
+    
+    # save the database out
+    print("Writing database archive...")
+    saveDatabaseFile(db, outdir, "all.jsonlines.tar", jobs)
 
     print(f"Table extraction took {(t1 - t0)}, reformat into one file took {time() - t1}")

@@ -211,21 +211,47 @@ class PartLibraryDb:
         self.categoryCache[c] = catId
         return catId
 
-    def getCategoryComponents(self, category, subcategory, stockNewerThan=None):
+    def getCategoryComponents(self, category, subcategory, stockNewerThan=None, limitRange=None):
         """
         Return an iterable of category components that have been in stock in the
         last stockNewerThan
         """
         catId = self.getCategoryId(category, subcategory)
+        if limitRange is None:
+            if stockNewerThan is None:
+                result = self.conn.cursor().execute("""
+                    SELECT * FROM v_components WHERE category_id = ?
+                    """, (catId,))
+            else:
+                result = self.conn.cursor().execute("""
+                    SELECT * FROM v_components WHERE category_id = ? and last_on_stock > ?
+                    """, (catId, int(time.time()) - stockNewerThan * 24 * 3600))
+        else:
+            if stockNewerThan is None:
+                result = self.conn.cursor().execute("""
+                    SELECT * FROM v_components WHERE category_id = ? ORDER BY lcsc LIMIT ?,?
+                    """, (catId, limitRange[0], limitRange[1]))
+            else:
+                result = self.conn.cursor().execute("""
+                    SELECT * FROM v_components WHERE category_id = ? and last_on_stock > ? ORDER BY lcsc LIMIT ?,?
+                    """, (catId, int(time.time()) - stockNewerThan * 24 * 3600, limitRange[0], limitRange[1]))
+        return list(map(dbToComp, result))
+    
+    def getCategoryComponentsCount(self, category, subcategory, stockNewerThan=None):
+        """
+        Return the number of category components that have been in stock in the
+        last stockNewerThan
+        """
+        catId = self.getCategoryId(category, subcategory)
         if stockNewerThan is None:
             result = self.conn.cursor().execute("""
-                SELECT * FROM v_components WHERE category_id = ?
+                SELECT COUNT(*) AS count FROM v_components WHERE category_id = ?
                 """, (catId,))
         else:
             result = self.conn.cursor().execute("""
-                SELECT * FROM v_components WHERE category_id = ? and last_on_stock > ?
+                SELECT COUNT(*) AS count FROM v_components WHERE category_id = ? and last_on_stock > ?
                 """, (catId, int(time.time()) - stockNewerThan * 24 * 3600))
-        return list(map(dbToComp, result))
+        return result.fetchall()[0]["count"]
 
     def addComponent(self, component, flag=None):
         cur = self.conn.cursor()
