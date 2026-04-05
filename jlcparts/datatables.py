@@ -504,7 +504,7 @@ def buildtables(library, outdir, ignoreoldstock, outfilename):
                 
                 def make_next_item(data):
                     index = 0
-                    componentsHeader = [schemaToLookup(['lcsc', 'mfr', 'description', 'attrsIdx', 'stock', 'subcategoryIdx', 'joints', 'datasheet', 'price', 'img', 'url'])] 
+                    componentsHeader = schemaToLookup(['lcsc', 'mfr', 'description', 'attrsIdx', 'stock', 'subcategoryIdx', 'joints', 'datasheet', 'price', 'img', 'url']) 
 
                     def next_item():
                         nonlocal index, componentsHeader
