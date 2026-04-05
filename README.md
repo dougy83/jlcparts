@@ -7,7 +7,7 @@ Why is this file showing up
 A better tool to browse the components offered by the [JLC PCB SMT Assembly
 Service](https://jlcpcb.com/smt-assembly).
 
-This repo is forked from the excellent work of jaqwsx ([repo here](https://github.com/dougy83/jlcparts)), and contains a number of number of enhancements, such as ~10x speedup for full-text search and >100x speedup for database update, and some filtering by basic parts, by favorite parts, by any subcategory with a matching name, download CSV file, etc.
+This repo is forked from the excellent work of yaqwsx ([repo here](https://github.com/yaqwsx/jlcparts)), and contains a number of number of enhancements, such as ~10x speedup for full-text search and >100x speedup for database update, and some filtering by basic parts, by favorite parts, by any subcategory with a matching name, download CSV file, etc.
 
 This forked repo was meant as a test site for the enhancements.
 

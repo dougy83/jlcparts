@@ -12,7 +12,7 @@ jobs:
     environment: github-pages
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -52,7 +52,7 @@ jobs:
 
           mkdir /tmp/cachezip
           fuse-zip cache-combined.zip /tmp/cachezip
-          jlcparts buildtables --jobs 0 \
+          jlcparts buildtables \
                     --ignoreoldstock 120 \
                     /tmp/cachezip/cache.sqlite3 web/build/data
           rm /tmp/cachezip/cache.sqlite3

@@ -1,6 +1,7 @@
 import dataclasses
 import re
 import os
+import resource
 import shutil
 import json
 import datetime
@@ -27,18 +28,32 @@ class SaveDatabaseParams:
     key: str
     value: object
 
-def saveDatabaseFile(database, outpath, outfilename):
-    with tarfile.open(os.path.join(outpath, outfilename), 'w') as tar:
-        for key, value in database.items():
-            filename = os.path.join(outpath, key + ".jsonlines.gz")
-            with gzip.open(filename, "wt", encoding="utf-8") as f:
-                for entry in value:
-                    json.dump(entry, f, separators=(',', ':'), sort_keys=False)
-                    f.write("\n")        
-            tar.add(filename, arcname=os.path.relpath(filename, start=outpath))
-            os.unlink(filename)
 
-    print("Done")
+def print_system_usage(tag=""):
+    # ---- Disk ----
+    total, used, free = shutil.disk_usage("/")
+
+    # ---- Memory (RAM) ----
+    # ru_maxrss is in kilobytes on Linux
+    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    rss_mb = rss_kb / 1024
+
+    meminfo = {}
+    with open("/proc/meminfo") as f:
+        for line in f:
+            key, value = line.split(":")
+            meminfo[key] = int(value.strip().split()[0])  # kB
+
+    ram_total = meminfo["MemTotal"] / 1024
+    ram_free = meminfo["MemAvailable"] / 1024
+
+    print(
+        f"[SYS]{'[' + tag + ']' if tag else ''} "
+        f"Disk free: {free / 1024**3:.1f} GB | "
+        f"Disk used: {used / 1024**3:.1f} GB | "
+        f"RAM (RSS): {rss_mb:.0f} MB | SysRAM: {ram_total:.0f} MB | SysFree: {ram_free:.0f} MB",
+        flush=True
+    )
 
 def weakUpdateParameters(attrs, newParameters):
     for attr, value in newParameters.items():
@@ -391,105 +406,145 @@ def _map_category(val: MapCategoryParams):
     dataTable.update({"category": val.catName, "subcategory": val.subcatName})
     return dataTable
 
+def addEntryToTar(outdir, key, items, tar):
+    filename = os.path.join(outdir, key + ".jsonlines.gz")
+    with gzip.open(filename, "wt", encoding="utf-8") as f:
+        if callable(items):
+            while True:
+                try:
+                    entry = items()
+                except StopIteration:
+                    break;
+                json.dump(entry, f, separators=(',', ':'), sort_keys=False)
+                f.write("\n")        
+        else:
+            for entry in items:
+                json.dump(entry, f, separators=(',', ':'), sort_keys=False)
+                f.write("\n")        
+
+    tar.add(filename, arcname=os.path.relpath(filename, start=outdir))
+    os.unlink(filename)
+
+
 @click.command()
 @click.argument("library", type=click.Path(dir_okay=False))
 @click.argument("outdir", type=click.Path(file_okay=False))
 @click.option("--ignoreoldstock", type=int, default=None,
     help="Ignore components that weren't on stock for more than n days")
-@click.option("--jobs", type=int, default=1,
-    help="Number of parallel processes. Defaults to 1, set to 0 to use all cores")
-def buildtables(library, outdir, ignoreoldstock, jobs):
+@click.option("--outfilename", type=click.STRING, default="all.jsonlines.tar")
+def buildtables(library, outdir, ignoreoldstock, outfilename):
     """
     Build datatables out of the LIBRARY and save them in OUTDIR
     """
 
-    t0 = time()
-    
     lib = PartLibraryDb(library)
     Path(outdir).mkdir(parents=True, exist_ok=True)
     clearDir(outdir)
 
-    total = 0
-    categoryIndex = {}
-
-    params = []
-    blockSize = 50000
-    for (catName, subcategories) in lib.categories().items():
-        for subcatName in subcategories:
-            subcatSize = lib.getCategoryComponentsCount(catName, subcatName)
-            if subcatSize <= blockSize:
-                total += 1
-                params.append(MapCategoryParams(
-                    libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
-                    catName=catName, subcatName=subcatName, limitRange=None))
-            else:
-                print(f"splitting category {catName} / {subcatName} up...")
-                for ofs in range(0, subcatSize, blockSize):
-                    print(f"category {catName} / {subcatName} block {ofs}")
-                    total += 1
-                    params.append(MapCategoryParams(
-                        libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
-                        catName=catName, subcatName=subcatName, limitRange=(ofs, blockSize)))
-
-    #params = [x for x in params if x.catName in ["Capacitors", "Resistors"]]
-    #while len(params) > 20:
-    #    params.pop()
-
-    with multiprocessing.Pool(jobs or multiprocessing.cpu_count()) as pool:
-        for i, result in enumerate(pool.imap_unordered(_map_category, params)):
-            if result is None:
-                continue
-            catName = result["category"] #.lower()
-            subcatName = result["subcategory"] #.lower()
-            sourceName = f"{catName}__x__{subcatName}"
-            print(f"{((i) / total * 100):.2f} % {catName}: {subcatName}")
-            if sourceName not in categoryIndex:
-                categoryIndex[sourceName] = result
-            else:
-                categoryIndex[sourceName]["components"] += result["components"]    # combine for categories that are only different because of case
-
-    t1 = time()
-    # db holds the data we're putting into our database file
     db = {
         "subcategories": [schemaToLookup(['subcategory', 'category', 'subcategoryIdx'])],
 #        "components": [schemaToLookup(['lcsc', 'mfr', 'description', 'attrsIdx', 'stock', 'subcategoryIdx', 'joints', 'datasheet', 'price', 'img', 'url'])],
         "attributes-lut": {}
     }
-    
-    # fill database
-    print("Filling database...")
-    s = None    # schema lookup
-    subcatIndex = 0
-    for sourceName, subcatEntry in categoryIndex.items():
-        if s is None:
-            s = schemaToLookup(subcatEntry["schema"])  # all schema will be the same
 
-        subcatIndex += 1
-        db["subcategories"] += [[subcatEntry["subcategory"], subcatEntry["category"], subcatIndex]]
+    t0 = time()
 
-        # separate each subcategory of components into its own table
-        db[f"components-{subcatIndex}"] = [schemaToLookup(['lcsc', 'mfr', 'description', 'attrsIdx', 'stock', 'subcategoryIdx', 'joints', 'datasheet', 'price', 'img', 'url'])]
-        for comp in subcatEntry["components"]:
-            db[f"components-{subcatIndex}"] += [[
-                comp[s["lcsc"]],
-                comp[s["mfr"]],
-                comp[s["description"]],
-                [updateLut(db["attributes-lut"], [attrName, value]) for attrName,value in comp[s["attributes"]].items()],
-                comp[s["stock"]],
-                subcatIndex,
-                comp[s["joints"]],
-                comp[s["datasheet"]],
-                comp[s["price"]],
-                comp[s["img"]],
-                comp[s["url"]]
-            ]]
+    with tarfile.open(os.path.join(outdir, outfilename), 'w') as tar:
+        total = 0
 
-    # invert the lut
-    print("Creating lookup table...")
-    db["attributes-lut"] = [json.loads(str) for str in lutToArray(db["attributes-lut"])]
-    
-    # save the database out
-    print("Writing database archive...")
-    saveDatabaseFile(db, outdir, "all.jsonlines.tar")
+        # count subcategories for progress display
+        for (catName, subcategories) in lib.categories().items():
+            for subcatName in subcategories:
+                total += 1
 
-    print(f"Table extraction took {(t1 - t0)}, reformat into one file took {time() - t1}")
+        subcatIndex = 0
+        sourceNameUsed = {}
+        s = None    # schema lookup
+
+        for (catName, subcategories) in lib.categories().items():
+            for subcatName in subcategories:
+                param = MapCategoryParams(
+                    libraryPath=library, outdir=outdir, ignoreoldstock=ignoreoldstock,
+                    catName=catName, subcatName=subcatName, limitRange=None)
+
+            #for i, result in enumerate(pool.imap_unordered(_map_category, params)):
+                subcatIndex += 1        # failed mapping will result in some subcatIndices not being associated with anything
+
+                subcatEntry = _map_category(param)
+                if subcatEntry is None:
+                    #print(f"Skipped {catName} | {subcatName}")
+                    continue
+
+                catName = subcatEntry["category"] #.lower()
+                subcatName = subcatEntry["subcategory"] #.lower()
+                sourceName = f"{catName}__x__{subcatName}"
+                print(f"{((subcatIndex) / total * 100):.2f} % {catName}: {subcatName}")
+                print_system_usage()
+
+                # compress redundant attributes using lookup table
+                # for comp in result["components"]:
+                #     comp["attributes"] [updateLut(db["attributes-lut"], [attrName, value]) for attrName,value in comp[s["attributes"]].items()],
+
+                if sourceName not in sourceNameUsed:
+                    sourceNameUsed[sourceName] = True
+                else:
+                    raise RuntimeError("Duplicate subcategory")
+
+    #for sourceName, subcatEntry in categoryIndex.items():
+                if s is None:
+                    s = schemaToLookup(subcatEntry["schema"])  # all schema will be the same
+
+                db["subcategories"] += [[subcatEntry["subcategory"], subcatEntry["category"], subcatIndex]]
+
+                # separate each subcategory of components into its own table
+                componentsEntryName = f"components-{subcatIndex}"
+                getComponentEntry = lambda: ()
+                
+                def make_next_item(data):
+                    index = 0
+                    componentsHeader = [schemaToLookup(['lcsc', 'mfr', 'description', 'attrsIdx', 'stock', 'subcategoryIdx', 'joints', 'datasheet', 'price', 'img', 'url'])] 
+
+                    def next_item():
+                        nonlocal index, componentsHeader
+
+                        if componentsHeader is not None:
+                            temp = componentsHeader
+                            componentsHeader = None
+                            return temp
+                        
+                        if index >= len(data):
+                            raise StopIteration(None)
+                        
+                        comp = data[index]
+                        index += 1
+
+                        return [
+                            comp[s["lcsc"]],
+                            comp[s["mfr"]],
+                            comp[s["description"]],
+                            [updateLut(db["attributes-lut"], [attrName, value]) for attrName,value in comp[s["attributes"]].items()],
+                            comp[s["stock"]],
+                            subcatIndex,
+                            comp[s["joints"]],
+                            comp[s["datasheet"]],
+                            comp[s["price"]],
+                            comp[s["img"]],
+                            comp[s["url"]]
+                        ]
+                    
+                    return next_item
+
+                getNextComponentLine = make_next_item(subcatEntry["components"])
+
+                # zip and add components entry to the tar file
+                addEntryToTar(outdir, componentsEntryName, getNextComponentLine, tar)
+
+
+        # invert the lut
+        print("Creating lookup table...")
+        db["attributes-lut"] = [json.loads(str) for str in lutToArray(db["attributes-lut"])]
+        addEntryToTar(outdir, "attributes-lut", db["attributes-lut"], tar)
+        addEntryToTar(outdir, "subcategories", db["subcategories"], tar)
+
+    t1 = time()
+    print(f"Done. Took {(t1-t0) / 60:.1f} minutes")
