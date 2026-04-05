@@ -468,12 +468,14 @@ def buildtables(library, outdir, ignoreoldstock, outfilename):
                     catName=catName, subcatName=subcatName, limitRange=None)
 
             #for i, result in enumerate(pool.imap_unordered(_map_category, params)):
-                subcatIndex += 1        # failed mapping will result in some subcatIndices not being associated with anything
+#                subcatIndex += 1        # failed mapping will result in some subcatIndices not being associated with anything
 
                 subcatEntry = _map_category(param)
                 if subcatEntry is None:
                     #print(f"Skipped {catName} | {subcatName}")
                     continue
+
+                subcatIndex += 1        # totally exclude failed mappings; contiguous subcatIndex in files
 
                 catName = subcatEntry["category"] #.lower()
                 subcatName = subcatEntry["subcategory"] #.lower()
