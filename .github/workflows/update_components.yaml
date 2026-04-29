@@ -34,12 +34,14 @@ jobs:
 
           # download cache parts into single file
           >cache-combined-bad.zip
-          for i in $(seq -w 01 30)
+          for i in $(seq -w 01 99)
           do            
             wget -q https://yaqwsx.github.io/jlcparts/data/cache.z$i || true
             if [ -f "cache.z$i" ]; then
               cat cache.z$i >> cache-combined-bad.zip
               rm cache.z$i
+            else
+              break
             fi
           done
           wget -q https://yaqwsx.github.io/jlcparts/data/cache.zip || true
