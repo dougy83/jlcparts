@@ -311,24 +311,56 @@ export class ComponentOverview extends React.Component {
     }
 
     filterComponents(components, activeProperties, requiredProperties) {
-        return components.filter(component => {
-            for (const property in activeProperties) {
-                if (this.state.stockRequired && component.stock < this.state.quantity)
-                    return false;
-                if (this.state.favoritesOnly && !this.state.favorites.has(component.lcsc))
-                    return false;                
-                let attributes = component.attributes;
+        const {
+            stockRequired,
+            quantity,
+            favoritesOnly,
+            favorites
+        } = this.state;
+
+        const activeEntries = Object.entries(activeProperties).map(([property, values]) => [
+            property,
+            new Set(values)
+        ]);
+
+        const hasRequiredProperties = requiredProperties.size > 0;
+
+        const result = [];
+
+        for (let i = 0; i < components.length; i++) {
+            const component = components[i];
+
+            if (stockRequired && component.stock < quantity)
+                continue;
+
+            if (favoritesOnly && !favorites.has(component.lcsc))
+                continue;
+
+            const attributes = component.attributes;
+            let matches = true;
+
+            for (let j = 0; j < activeEntries.length; j++) {
+                const [property, allowedValues] = activeEntries[j];
+
                 if (!(property in attributes)) {
-                    if (requiredProperties.has(property))
-                        return false;
-                    else
-                        continue;
+                    if (hasRequiredProperties && requiredProperties.has(property)) {
+                        matches = false;
+                        break;
+                    }
+                    continue;
                 }
-                if (!(activeProperties[property].includes(valueFootprint(attributes[property]))))
-                    return false;
+
+                if (allowedValues.size === 0 || !allowedValues.has(valueFootprint(attributes[property]))) {
+                    matches = false;
+                    break;
+                }
             }
-            return true;
-        });
+
+            if (matches)
+                result.push(component);
+        }
+
+        return result;
     }
 
     handleQuantityChange = q => {
