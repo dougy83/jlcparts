@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "https://dougy83.github.io/jlcparts/static/css/main.f048f7de.css",
+    "main.js": "https://dougy83.github.io/jlcparts/static/js/main.99c94654.js",
+    "index.html": "https://dougy83.github.io/jlcparts/index.html",
+    "static/media/sliders.svg": "https://dougy83.github.io/jlcparts/static/media/sliders.6ff4019621accc88343b86ca425a4761.svg",
+    "main.f048f7de.css.map": "https://dougy83.github.io/jlcparts/static/css/main.f048f7de.css.map",
+    "main.99c94654.js.map": "https://dougy83.github.io/jlcparts/static/js/main.99c94654.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.f048f7de.css",
+    "static/js/main.99c94654.js"
+  ]
+}
